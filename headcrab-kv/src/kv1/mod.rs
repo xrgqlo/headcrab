@@ -12,12 +12,15 @@ mod block;
 mod key;
 mod tokens;
 
+#[cfg(test)]
+mod tests;
+
 pub use block::*;
 pub use key::*;
 
 use tokens::*;
 
-pub type Result<T> = std::result::Result<T, ParsingError>;
+pub type Result<T> = std::result::Result<T, KV1Error>;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -32,46 +35,34 @@ impl KV1Tree {
 }
 
 impl TryFrom<&Path> for KV1Tree {
-    type Error = ParsingError;
+    type Error = KV1Error;
 
     fn try_from(value: &Path) -> Result<Self> {
-        let content =
-            fs::read_to_string(value).map_err(|e| ParsingError::new(value.to_owned(), e.into()))?;
-        KV1Tree::from_str(&content).map_err(|e| ParsingError::new(value.to_owned(), e.into()))
+        fs::read_to_string(value)
+            .map_err(|e| KV1Error::new(value.to_owned(), e.into()))?
+            .parse::<KV1Tree>()
+            .map_err(|e| KV1Error::new(value.to_owned(), e.into()))
     }
 }
 
 impl FromStr for KV1Tree {
-    type Err = LexerError;
+    type Err = ParsingError;
 
-    fn from_str(s: &str) -> std::result::Result<Self, LexerError> {
+    fn from_str(s: &str) -> std::result::Result<Self, ParsingError> {
         let mut blocks: Vec<Block> = vec![];
         let mut lexer = KV1Token::lexer(s);
         let mut current_block: Vec<Block> = vec![];
 
-        while let Some(token) = lexer
-            .next()
-            .transpose()
-            .map_err(|_| LexerError::Placeholder)?
-        {
-            // needs proper error handling but whatever
-
+        while let Some(token) = lexer.next().transpose()? {
             match token {
                 KV1Token::Block => current_block.push(Block::new(lexer.slice())),
-                KV1Token::Pair => {
-                    let mut split = lexer.slice().split("\"");
-                    split.next();
-                    let name = split.next().unwrap();
-                    split.next();
-                    let value = split.next().unwrap();
-                    current_block
-                        .last_mut()
-                        .map(|cb| cb.add_pair(name, value))
-                        .ok_or(LexerError::MissingBlock)?;
-                }
+                KV1Token::Pair(pair) => current_block
+                    .last_mut()
+                    .ok_or(ParsingError::MissingBlock)?
+                    .add_pair(pair),
                 KV1Token::LeftBrace => {}
                 KV1Token::RightBrace => {
-                    let current = current_block.pop().ok_or(LexerError::MissingBlock)?;
+                    let current = current_block.pop().ok_or(ParsingError::MissingBlock)?;
                     if let Some(cb) = current_block.last_mut() {
                         cb.add_block(current)
                     } else {
@@ -96,32 +87,32 @@ impl Display for KV1Tree {
 
 #[allow(dead_code)]
 #[derive(Debug, Error)]
-#[error("could not parse {p}: {kind}")]
-pub struct ParsingError {
+#[error("{p}: {kind}")]
+pub struct KV1Error {
     p: PathBuf,
-    kind: ParsingErrorKind,
+    kind: ErrorKind,
 }
 
-impl ParsingError {
-    fn new(p: PathBuf, kind: ParsingErrorKind) -> Self {
+impl KV1Error {
+    fn new(p: PathBuf, kind: ErrorKind) -> Self {
         Self { p, kind }
     }
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Error)]
-pub enum ParsingErrorKind {
+pub enum ErrorKind {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("lexing error: {0}")]
-    Lexer(#[from] LexerError),
+    #[error("parsing error: {0}")]
+    Parsing(#[from] ParsingError),
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Error)]
-pub enum LexerError {
-    #[error("placeholder lexing error")]
-    Placeholder,
+#[derive(Debug, Error, Clone, PartialEq)]
+pub enum ParsingError {
+    #[error("lexing error: {0}")]
+    Lexing(#[from] LexingError),
     #[error("expected block not found")]
     MissingBlock,
 }

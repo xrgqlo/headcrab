@@ -23,8 +23,8 @@ impl Block {
         }
     }
 
-    pub fn add_pair(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.pairs.push(Key::new(key, value))
+    pub fn add_pair(&mut self, p: Key) {
+        self.pairs.push(p)
     }
 
     /// Update a block's and its children's depth
@@ -40,7 +40,8 @@ impl Block {
         self.blocks.push(block);
     }
 
-    pub fn with_blocks(mut self, mut blocks: Vec<Block>) -> Self {
+    #[cfg(test)]
+    pub(super) fn with_blocks(mut self, mut blocks: Vec<Block>) -> Self {
         for b in &mut blocks {
             b.update_depth(self.depth + 1);
         }
@@ -48,6 +49,7 @@ impl Block {
         self
     }
 
+    #[cfg(test)]
     pub fn with_pairs(mut self, keys: Vec<Key>) -> Self {
         self.pairs = keys;
         self
@@ -56,13 +58,14 @@ impl Block {
 
 impl Display for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let indent: String = std::iter::repeat('\t').take(self.depth).collect();
+        const TAB: &'static str = "    ";
+        let indent: String = std::iter::repeat(TAB).take(self.depth).collect();
 
         write!(f, "{indent}{}\n", self.name)?;
         write!(f, "{indent}{{\n")?;
 
         for p in &self.pairs {
-            write!(f, "{indent}\t{p}\n")?;
+            write!(f, "{indent}{TAB}{p}\n")?;
         }
 
         for b in &self.blocks {
