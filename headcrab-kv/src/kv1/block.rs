@@ -1,9 +1,16 @@
+use std::fmt::Display;
+
+use super::Key;
+
+type Depth = usize;
+
 /// A block containing keys and optionally sub-blocks.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
     pub name: String,
-    pub blocks: Vec<Block>,
-    pub pairs: Vec<super::Key>,
+    blocks: Vec<Block>,
+    pub pairs: Vec<Key>,
+    depth: Depth,
 }
 
 impl Block {
@@ -12,41 +19,58 @@ impl Block {
             name: name.into(),
             blocks: Vec::new(),
             pairs: Vec::new(),
+            depth: 0,
         }
     }
 
     pub fn add_pair(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.pairs.push(super::Key::new(key, value))
+        self.pairs.push(Key::new(key, value))
     }
 
-    pub fn with_blocks(mut self, blocks: Vec<Block>) -> Self {
+    /// Update a block's and its children's depth
+    fn update_depth(&mut self, depth: Depth) {
+        self.depth = depth;
+        for b in &mut self.blocks {
+            b.update_depth(depth + 1);
+        }
+    }
+
+    pub fn add_block(&mut self, mut block: Block) {
+        block.update_depth(self.depth + 1);
+        self.blocks.push(block);
+    }
+
+    pub fn with_blocks(mut self, mut blocks: Vec<Block>) -> Self {
+        for b in &mut blocks {
+            b.update_depth(self.depth + 1);
+        }
         self.blocks = blocks;
         self
     }
 
-    pub fn with_pairs(mut self, keys: Vec<super::Key>) -> Self {
+    pub fn with_pairs(mut self, keys: Vec<Key>) -> Self {
         self.pairs = keys;
         self
     }
+}
 
-    pub fn to_strings(&self) -> Vec<String> {
-        let mut block_string = vec![];
+impl Display for Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let indent: String = std::iter::repeat('\t').take(self.depth).collect();
 
-        block_string.push(format!("{}\n", self.name));
-        block_string.push("{\n".to_string());
+        write!(f, "{indent}{}\n", self.name)?;
+        write!(f, "{indent}{{\n")?;
 
-        for key in self.pairs.clone() {
-            block_string.push(format!("\t{}\n", key));
+        for p in &self.pairs {
+            write!(f, "{indent}\t{p}\n")?;
         }
 
-        for block in self.blocks.clone() {
-            for string in block.to_strings() {
-                block_string.push(format!("\t{}", string));
-            }
+        for b in &self.blocks {
+            write!(f, "{b}")?;
         }
 
-        block_string.push("}\n".to_string());
+        write!(f, "{indent}}}\n")?;
 
-        block_string
+        Ok(())
     }
 }

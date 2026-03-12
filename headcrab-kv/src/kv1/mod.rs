@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs,
     path::{Path, PathBuf},
     str::FromStr,
@@ -19,7 +20,7 @@ use tokens::*;
 pub type Result<T> = std::result::Result<T, ParsingError>;
 
 #[allow(dead_code)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct KV1Tree {
     pub blocks: Vec<Block>,
 }
@@ -47,7 +48,6 @@ impl FromStr for KV1Tree {
         let mut blocks: Vec<Block> = vec![];
         let mut lexer = KV1Token::lexer(s);
         let mut current_block: Vec<Block> = vec![];
-        let mut depth = 0;
 
         while let Some(token) = lexer
             .next()
@@ -64,17 +64,18 @@ impl FromStr for KV1Tree {
                     let name = split.next().unwrap();
                     split.next();
                     let value = split.next().unwrap();
-                    current_block[depth - 1].add_pair(name, value);
+                    current_block
+                        .last_mut()
+                        .map(|cb| cb.add_pair(name, value))
+                        .ok_or(LexerError::MissingBlock)?;
                 }
-                KV1Token::LeftBrace => depth += 1,
+                KV1Token::LeftBrace => {}
                 KV1Token::RightBrace => {
-                    depth -= 1;
-                    if depth > 0 {
-                        let current = current_block[depth].clone();
-                        current_block[depth - 1].blocks.push(current);
+                    let current = current_block.pop().ok_or(LexerError::MissingBlock)?;
+                    if let Some(cb) = current_block.last_mut() {
+                        cb.add_block(current)
                     } else {
-                        blocks.push(current_block[depth].clone());
-                        current_block = vec![]
+                        blocks.push(current);
                     }
                 }
             }
@@ -84,17 +85,12 @@ impl FromStr for KV1Tree {
     }
 }
 
-impl ToString for KV1Tree {
-    fn to_string(&self) -> String {
-        let mut string = "".to_string();
-
-        for block in &self.blocks {
-            for line in block.to_strings() {
-                string += line.as_str();
-            }
+impl Display for KV1Tree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for b in &self.blocks {
+            write!(f, "{b}")?;
         }
-
-        string
+        Ok(())
     }
 }
 
@@ -115,9 +111,9 @@ impl ParsingError {
 #[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum ParsingErrorKind {
-    #[error("{0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("{0}")]
+    #[error("lexing error: {0}")]
     Lexer(#[from] LexerError),
 }
 
@@ -126,4 +122,6 @@ pub enum ParsingErrorKind {
 pub enum LexerError {
     #[error("placeholder lexing error")]
     Placeholder,
+    #[error("expected block not found")]
+    MissingBlock,
 }
