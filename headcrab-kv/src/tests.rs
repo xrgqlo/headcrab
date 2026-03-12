@@ -17,16 +17,8 @@ pub fn kv1_from_str() {
 
     let tree = KV1Tree {
         blocks: vec![
-            Block {
-                name: "block1".to_string(),
-                blocks: vec![],
-                keys: vec![Key("key1".to_string(), "value1".to_string())],
-            },
-            Block {
-                name: "block2".to_string(),
-                blocks: vec![],
-                keys: vec![Key("key2".to_string(), "value2".to_string())],
-            },
+            Block::new("block1").with_pairs(vec![Key::new("key1", "value1")]),
+            Block::new("block2").with_pairs(vec![Key::new("key2", "value2")]),
         ],
     };
 
@@ -37,21 +29,16 @@ pub fn kv1_from_str() {
 pub fn kv1_to_str() {
     use super::kv1::{Block, KV1Tree, Key};
 
-    const STRING: &'static str =
-        "block1\n{\n\t\"key1\" \"value1\"\n}\nblock2\n{\n\t\"key2\" \"value2\"\n}\n";
+    const STRING: &'static str = "block1\n{\n\t\"key1\" \"value1\"\n}\nblock2\n{\n\t\"key2\" \"value2\"\n\tblock3\n\t{\n\t\t\"key3\" \"value3\"\n\t}\n}\n";
 
     let tree = KV1Tree {
         blocks: vec![
-            Block {
-                name: "block1".to_string(),
-                blocks: vec![],
-                keys: vec![Key("key1".to_string(), "value1".to_string())],
-            },
-            Block {
-                name: "block2".to_string(),
-                blocks: vec![],
-                keys: vec![Key("key2".to_string(), "value2".to_string())],
-            },
+            Block::new("block1").with_pairs(vec![Key::new("key1", "value1")]),
+            Block::new("block2")
+                .with_pairs(vec![Key::new("key2", "value2")])
+                .with_blocks(vec![
+                    Block::new("block3").with_pairs(vec![Key::new("key3", "value3")]),
+                ]),
         ],
     };
 

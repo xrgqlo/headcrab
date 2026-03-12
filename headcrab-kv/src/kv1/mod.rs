@@ -57,20 +57,14 @@ impl FromStr for KV1Tree {
             // needs proper error handling but whatever
 
             match token {
-                KV1Token::Block => current_block.push(Block {
-                    name: lexer.slice().to_string(),
-                    blocks: vec![],
-                    keys: vec![],
-                }),
+                KV1Token::Block => current_block.push(Block::new(lexer.slice())),
                 KV1Token::Pair => {
                     let mut split = lexer.slice().split("\"");
                     split.next();
                     let name = split.next().unwrap();
                     split.next();
                     let value = split.next().unwrap();
-                    current_block[depth - 1]
-                        .keys
-                        .push(Key(name.to_string(), value.to_string()));
+                    current_block[depth - 1].add_pair(name, value);
                 }
                 KV1Token::LeftBrace => depth += 1,
                 KV1Token::RightBrace => {
